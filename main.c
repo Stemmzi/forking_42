@@ -71,18 +71,23 @@ int check_header(struct bmp_header* header, u8* pixel_data, u32 x, u32 y)
 {
 	u8* pixel;
 	u32 temp = x;
+	u32 row_width = header->width * 4;
+	u8* base_row = pixel_data + ((header->height - 1 - y) * row_width);
 	for (u32 i = x; i < 7; i++)
 	{
-		pixel = pixel_data + ((header->height - 1 - y) * header->width + i) * 4;
+		// pixel = pixel_data + ((header->height - 1 - y) * header->width + i) * 4;
+		pixel = base_row + (i * 4);
 		if (pixel[0] != 127 || pixel[1] != 188 || pixel[2] != 217)
 			return (false);
 	}
 	pixel = pixel_data + ((header->height - 1 - y) * header->width + x + 7) * 4;
+	pixel = base_row + ((x + 7) * 4);
 	if (pixel[0] == 127 && pixel[1] == 188 && pixel[2] == 217)
 		return (false);
 	else
 	{
-		pixel = pixel_data + ((header->height - 1 - y) * header->width + x + 7) * 4;
+		// pixel = pixel_data + ((header->height - 1 - y) * header->width + x + 7) * 4;
+		pixel = base_row + ((x + 7) * 4);
 		// printf("found pixel at (%u, %u)\n", x + 7, header->height - 1 - y);
 		// printf("b: %d, r: %d\n", pixel[0], pixel[2]);
 		g_msg_len = pixel[0] + pixel[2];
@@ -92,7 +97,8 @@ int check_header(struct bmp_header* header, u8* pixel_data, u32 x, u32 y)
 
 	for (u32 i = y; i < 7; i++)
 	{
-		pixel = pixel_data + ((header->height - 1 - i) * header->width + temp) * 4;
+		// pixel = pixel_data + ((header->height - 1 - i) * header->width + temp) * 4;
+		pixel = base_row + (temp * 4);
 		if (pixel[0] != 127 || pixel[1] != 188 || pixel[2] != 217)
 			return (false);
 	}
@@ -132,6 +138,15 @@ void	printing_msg(struct bmp_header* header, u8* pixel_data)
 	free(output);
 }
 
+void	find_start(struct bmp_header* header, u8* pixel_data, u8* pixel, u32 x, u32 *y)
+{
+	while (pixel[0] == 127 && pixel[1] == 188 && pixel[2] == 217)
+	{
+		(*y)--;
+		pixel = pixel_data + ((header->height - 1 - *y) * header->width + x) * 4;
+	}
+	(*y)++;
+}
 int main(int argc, char** argv)
 {
 	// clock_t start_time = clock();
@@ -147,12 +162,11 @@ int main(int argc, char** argv)
 		return 1;
 	}
 	struct bmp_header* header = (struct bmp_header*) file_content.data;
-	// printf("signature: %.2s\nfile_size: %u\ndata_offset: %u\ninfo_header_size: %u\nwidth: %u\nheight: %u\nplanes: %i\nbit_per_px: %i\ncompression_type: %u\ncompression_size: %u\n", header->signature, header->file_size, header->data_offset, header->info_header_size, header->width, header->height, header->number_of_planes, header->bit_per_pixel, header->compression_type, header->compressed_image_size);
 
 	u8* pixel_data = (u8*)(file_content.data + header->data_offset);
 	u8* pixel;
 
-	for (u32 y = 0; y < header->height; y++)
+	for (u32 y = 0; y < header->height; y+=7)
 	{
 		for (u32 x = 0; x < header->width; x++)
 		{
@@ -160,6 +174,7 @@ int main(int argc, char** argv)
 
 			if (pixel[0] == 127 && pixel[1] == 188 && pixel[2] == 217)
 			{
+				find_start(header, pixel_data, pixel, x, &y);
 				if (check_header(header, pixel_data, x, y) == true)
 				{
 					printing_msg(header, pixel_data);
